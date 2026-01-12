@@ -35,3 +35,18 @@ div.transcript-extractor-wrapper button.transcript-extractor-button:active {
 	position:relative;
 	top:1px;
 }
+
+div.transcript-extractor-wrapper label.transcript-extractor-label {
+	color: #ffffff;
+	font-family: Arial;
+	font-size: 11px;
+	font-weight: bold;
+	margin-bottom: 5px;
+	display: block;
+	cursor: pointer;
+}
+
+div.transcript-extractor-wrapper input.transcript-extractor-checkbox {
+	margin-right: 5px;
+	cursor: pointer;
+}

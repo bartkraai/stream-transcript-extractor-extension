@@ -1,10 +1,19 @@
 {
 	"manifest_version": 3,
 	"name": "Transcript Extractor for Microsoft Stream",
-	"version": "1.1",
+	"version": "1.2",
 	"description": "Microsoft Stream one click transcript extractor. Copy or download the transcript for easy summarization of meetings via AI (LLMs)",
-	"action": {},
-	"background": {},
+	"permissions": [
+		"clipboardWrite"
+	],
+	"host_permissions": [
+		"https://*.microsoftstream.com/*",
+		"https://*.sharepoint.com/*",
+		"https://web.microsoftstream.com/*"
+	],
+	"background": {
+		"service_worker": "background.js"
+	},
 	"icons": {
 		"16": "icons/transcript-icon16.png",
 		"32": "icons/transcript-icon32.png",
@@ -14,14 +23,17 @@
 	"content_scripts": [
 		{
 			"matches": [
-				"https://*/*stream.aspx*"
+				"https://*.microsoftstream.com/*",
+				"https://*.sharepoint.com/*",
+				"https://web.microsoftstream.com/*"
 			],
 			"js": [
 				"content.js"
 			],
 			"css": [
 				"styles.css"
-			]
+			],
+			"run_at": "document_start"
 		}
 	],
 	"web_accessible_resources": [
