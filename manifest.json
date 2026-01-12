@@ -4,7 +4,8 @@
 	"version": "1.2",
 	"description": "Microsoft Stream one click transcript extractor. Copy or download the transcript for easy summarization of meetings via AI (LLMs)",
 	"permissions": [
-		"clipboardWrite"
+		"clipboardWrite",
+		"storage"
 	],
 	"host_permissions": [
 		"https://*.microsoftstream.com/*",

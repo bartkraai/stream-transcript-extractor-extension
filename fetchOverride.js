@@ -19,40 +19,6 @@
 		return `${minutes}:${secs.toString().padStart(2, '0')}`;
 	}
 
-	// Helper function to get speaker name from ID
-	function getSpeakerName(speakerId) {
-		if (!speakerId) return 'Unknown Speaker';
-		
-		// Check if we have real name mapping
-		if (window.speakerNamesMap && window.speakerNamesMap.has(speakerId)) {
-			return window.speakerNamesMap.get(speakerId);
-		}
-		
-		// If it's a GUID, try to find the name on the page
-		if (typeof speakerId === 'string' && speakerId.match(/^[0-9a-f-]{36}$/i)) {
-			// Try to find speaker name in the DOM by searching for the GUID
-			const speakerElements = document.querySelectorAll(`[data-speaker-id="${speakerId}"], [data-speakerid="${speakerId}"]`);
-			if (speakerElements.length > 0) {
-				const name = speakerElements[0].textContent?.trim() || speakerElements[0].getAttribute('title') || speakerElements[0].getAttribute('aria-label');
-				if (name) {
-					if (!window.speakerNamesMap) window.speakerNamesMap = new Map();
-					window.speakerNamesMap.set(speakerId, name);
-					return name;
-				}
-			}
-			
-			// Fall back to numbered speaker labels
-			if (!window.speakerNumberMap) window.speakerNumberMap = new Map();
-			if (!window.speakerNumberMap.has(speakerId)) {
-				window.speakerNumberMap.set(speakerId, `Speaker ${window.speakerNumberMap.size + 1}`);
-			}
-			return window.speakerNumberMap.get(speakerId);
-		}
-		
-		// Return as-is if not a GUID
-		return speakerId;
-	}
-
 	// Helper function to store transcript (waits for body if needed)
 	function storeTranscript(transcriptText) {
 		if (!transcriptText || !transcriptText.trim()) {
@@ -68,8 +34,15 @@
 				hiddenDiv.id = 'transcript-extractor-for-microsoft-stream-hidden-div-with-transcript';
 				document.body.appendChild(hiddenDiv);
 			}
-			hiddenDiv.textContent = transcriptText;
-			console.log('✅ Transcript stored successfully!', transcriptText.length, 'characters');
+			
+			// Prepend meeting room if available
+			let finalText = transcriptText;
+			if (window.meetingRoomName) {
+				finalText = `Meeting Room: ${window.meetingRoomName}\n\n${transcriptText}`;
+			}
+			
+			hiddenDiv.textContent = finalText;
+			console.log('✅ Transcript stored successfully!', finalText.length, 'characters');
 		};
 
 		if (document.body) {
@@ -99,39 +72,82 @@
 
 		const clone = response.clone();
 
+		// Log all API calls to help debug
+		if (typeof resource === 'string') {
+			console.log('🔍 API Call:', resource.substring(0, 150));
+			
+			// Extract and track event/meeting IDs from URLs
+			const eventIdMatch = resource.match(/[?&]id=([^&]+)/i) || 
+			                     resource.match(/\/events\/([a-f0-9-]{36})/i) ||
+			                     resource.match(/\/meetings\/([a-f0-9-]{36})/i) ||
+			                     resource.match(/eventId[=\/]([a-f0-9-]{36})/i);
+			
+			if (eventIdMatch) {
+				const eventId = eventIdMatch[1];
+				if (!window.currentEventId || window.currentEventId !== eventId) {
+					window.currentEventId = eventId;
+					console.log('📅 Event/Meeting ID detected:', eventId);
+				}
+				console.log('📅 API call using Event ID:', eventId, 'in URL:', resource.substring(0, 100));
+			}
+		}
+
 		// Check for any API response that might contain speaker/participant information
+		// Expanded list of patterns to catch speaker data
 		if (typeof resource === 'string' && (
 			resource.includes('participant') || 
 			resource.includes('attendee') || 
 			resource.includes('user') ||
 			resource.includes('people') ||
-			resource.includes('profile')
+			resource.includes('profile') ||
+			resource.includes('meeting') ||
+			resource.includes('conversation') ||
+			resource.includes('member') ||
+			resource.includes('organizer') ||
+			resource.includes('speaker') ||
+			resource.includes('metadata') ||
+			resource.includes('properties')
 		)) {
+			// Speaker extraction removed - focus on meeting room only
 			clone.json().then(data => {
 				try {
-					// Try to extract speaker mappings from various API response structures
-					if (!window.speakerNamesMap) window.speakerNamesMap = new Map();
+					console.log('📋 Potential metadata API response:', resource.substring(0, 100));
 					
-					const extractSpeakers = (obj) => {
+					// Extract meeting room information
+					const extractMeetingRoom = (obj) => {
 						if (!obj || typeof obj !== 'object') return;
 						
+						// Check for room/location fields in the response
+						if (obj.location && typeof obj.location === 'string') {
+							window.meetingRoomName = obj.location;
+							console.log('🏢 Found meeting room:', obj.location);
+						} else if (obj.location && obj.location.displayName) {
+							window.meetingRoomName = obj.location.displayName;
+							console.log('🏢 Found meeting room:', obj.location.displayName);
+						} else if (obj.meetingRoom) {
+							window.meetingRoomName = obj.meetingRoom;
+							console.log('🏢 Found meeting room:', obj.meetingRoom);
+						} else if (obj.room) {
+							window.meetingRoomName = obj.room;
+							console.log('🏢 Found meeting room:', obj.room);
+						}
+						
+						// Recursively search for room info in nested objects
 						if (Array.isArray(obj)) {
-							obj.forEach(extractSpeakers);
+							obj.forEach(extractMeetingRoom);
 						} else {
-							// Look for speaker/participant objects with id and name
-							if (obj.id && (obj.name || obj.displayName || obj.userName)) {
-								const name = obj.name || obj.displayName || obj.userName;
-								window.speakerNamesMap.set(obj.id, name);
-								console.log('Found speaker from API:', obj.id, '->', name);
-							}
-							
-							// Recurse into nested objects
-							Object.values(obj).forEach(extractSpeakers);
+							Object.values(obj).forEach(val => {
+								if (val && typeof val === 'object') {
+									extractMeetingRoom(val);
+								}
+							});
 						}
 					};
 					
-					extractSpeakers(data);
-				} catch (e) { /* ignore parsing errors */ }
+					extractMeetingRoom(data);
+				} catch (e) { 
+					console.error('Error extracting meeting room:', e);
+				}
 			}).catch(() => { /* ignore if not JSON */ });
 		}
 
@@ -143,222 +159,209 @@
 		);
 
 		if (isTranscriptMetadata) {
-			clone.json()
-				.then(async (data) => {
+			// Handle potentially compressed metadata response
+			(async () => {
+				try {
+					console.log('🎯 Step 1: Starting transcript metadata processing');
+					const metadataClone = response.clone();
+					const contentEncoding = metadataClone.headers.get('content-encoding');
+					
+					console.log('📦 Transcript metadata headers:', {
+						contentEncoding,
+						contentType: metadataClone.headers.get('content-type'),
+						status: metadataClone.status
+					});
+					
+					let data;
+					
+					// If content-encoding header is set, browser auto-decompresses, use .json() directly
+					if (contentEncoding === 'gzip' || contentEncoding === 'deflate') {
+						console.log('📄 Step 2a: Content-Encoding set, browser will auto-decompress, using .json()');
+						try {
+							data = await metadataClone.json();
+							console.log('✅ Step 2b: JSON parse successful (browser decompressed)');
+						} catch (jsonErr) {
+							console.error('❌ JSON parse error after browser decompression:', jsonErr);
+							throw jsonErr;
+						}
+					} else {
+						// No content-encoding header, check if data is actually compressed
+						const arrayBuffer = await metadataClone.arrayBuffer();
+						const bytes = new Uint8Array(arrayBuffer);
+						
+						// Check for gzip magic number (0x1f 0x8b)
+						const isGzipped = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+						console.log('🔍 Detected format:', {
+							isGzipped,
+							firstBytes: Array.from(bytes.slice(0, 10)).map(b => '0x' + b.toString(16)).join(' ')
+						});
+						
+						if (isGzipped) {
+							// Manually decompress
+							console.log('🗜️ Step 2a: Data is gzipped (no header), manually decompressing...');
+							try {
+								const blob = new Blob([arrayBuffer]);
+								const ds = new DecompressionStream('gzip');
+								const decompressedStream = blob.stream().pipeThrough(ds);
+								const decompressedBlob = await new Response(decompressedStream).blob();
+								const text = await decompressedBlob.text();
+								data = JSON.parse(text);
+								console.log('✅ Step 2b: Manual decompression successful');
+							} catch (decompressErr) {
+								console.error('❌ Manual decompression error:', decompressErr);
+								throw decompressErr;
+							}
+						} else {
+							// Try parsing as plain JSON first
+							console.log('📄 Step 2a: No gzip magic number detected, trying direct JSON parse');
+							try {
+								const text = new TextDecoder().decode(arrayBuffer);
+								console.log('📄 Step 2b: Decoded text, length:', text.length, 'sample:', text.substring(0, 100));
+								data = JSON.parse(text);
+								console.log('✅ Step 2c: Direct JSON parse successful');
+							} catch (jsonErr) {
+								// JSON parse failed - data might be compressed without proper magic number
+								console.warn('⚠️ JSON parse failed, attempting gzip decompression as fallback...');
+								console.log('⚠️ Parse error was:', jsonErr.message);
+								try {
+									const blob = new Blob([arrayBuffer]);
+									const ds = new DecompressionStream('gzip');
+									const decompressedStream = blob.stream().pipeThrough(ds);
+									const decompressedBlob = await new Response(decompressedStream).blob();
+									const text = await decompressedBlob.text();
+									data = JSON.parse(text);
+									console.log('✅ Step 2d: Fallback decompression successful!');
+								} catch (fallbackErr) {
+									console.error('❌ Fallback decompression also failed:', fallbackErr);
+									console.error('❌ First 200 bytes as hex:', Array.from(bytes.slice(0, 200)).map(b => '0x' + b.toString(16)).join(' '));
+									// Re-throw the original JSON error since decompression didn't help
+									throw jsonErr;
+								}
+							}
+						}
+					}
+					
+					console.log('📄 Step 3: Transcript metadata response:', JSON.stringify(data).substring(0, 300));
+
 					if (!data) {
-						console.warn('Transcript metadata is empty');
+						console.warn('⚠️ Step 4: Transcript metadata is empty');
 						return;
 					}
 
+					console.log('✅ Step 4: Metadata is valid, checking structure');
+
 					// New SharePoint/Stream API structure with temporaryDownloadUrl
 					if (data.media && data.media.transcripts && Array.isArray(data.media.transcripts)) {
+						console.log('✅ Step 5: Found media.transcripts array, length:', data.media.transcripts.length);
 						const transcript = data.media.transcripts[0];
 						if (transcript && transcript.temporaryDownloadUrl) {
-							console.log('Fetching transcript from:', transcript.temporaryDownloadUrl);
+							console.log('✅ Step 6: Found temporaryDownloadUrl:', transcript.temporaryDownloadUrl);
 							try {
-								// First, try to extract speaker names from the page
-								if (!window.speakerNamesMap) {
-									window.speakerNamesMap = new Map();
-									
-									// Try to find speaker information in the page DOM
-									// Method 1: Look for data attributes with speaker IDs
-									const speakerElements = document.querySelectorAll('[data-speaker-id], [data-speakerid], [class*="speaker"], [class*="participant"]');
-									speakerElements.forEach(el => {
-										const speakerId = el.getAttribute('data-speaker-id') || el.getAttribute('data-speakerid');
-										const speakerName = el.textContent?.trim() || el.getAttribute('title') || el.getAttribute('aria-label');
-										if (speakerId && speakerName) {
-											window.speakerNamesMap.set(speakerId, speakerName);
-											console.log('Found speaker mapping:', speakerId, '->', speakerName);
-										}
-									});
-									
-									// Method 2: Try to find in React/Angular data properties
-									const allElements = document.querySelectorAll('*');
-									allElements.forEach(el => {
-										// Check for React internal properties
-										for (const key in el) {
-											if (key.startsWith('__react') || key.startsWith('__angular')) {
-												try {
-													const props = el[key];
-													if (props && props.memoizedProps && props.memoizedProps.speaker) {
-														const speaker = props.memoizedProps.speaker;
-														if (speaker.id && speaker.name) {
-															window.speakerNamesMap.set(speaker.id, speaker.name);
-															console.log('Found speaker mapping:', speaker.id, '->', speaker.name);
-														}
-													}
-												} catch (e) { /* ignore */ }
-											}
-										}
-									});
+								// Fetch the actual transcript content
+								console.log('🌐 Step 7: Fetching transcript content...');
+								const transcriptResponse = await originalFetch(transcript.temporaryDownloadUrl);
+								console.log('✅ Step 8: Got transcript response, status:', transcriptResponse.status);
+								
+								// Get response as array buffer to detect format
+								const transcriptBuffer = await transcriptResponse.arrayBuffer();
+								const transcriptBytes = new Uint8Array(transcriptBuffer);
+								
+								// Check for gzip magic number
+								const isTranscriptGzipped = transcriptBytes.length > 2 && transcriptBytes[0] === 0x1f && transcriptBytes[1] === 0x8b;
+								const transcriptEncoding = transcriptResponse.headers.get('content-encoding');
+								
+								console.log('📦 Step 9: Transcript format detection:', {
+									isGzipped: isTranscriptGzipped,
+									contentEncoding: transcriptEncoding,
+									firstBytes: Array.from(transcriptBytes.slice(0, 10)).map(b => '0x' + b.toString(16)).join(' ')
+								});
+								
+								let transcriptText = '';
+								
+								// Handle gzip compressed responses (by header or magic number)
+								if (transcriptEncoding === 'gzip' || transcriptEncoding === 'deflate' || isTranscriptGzipped) {
+									console.log('🗜️ Step 10a: Transcript is compressed, decompressing...');
+									try {
+										const blob = new Blob([transcriptBuffer]);
+										console.log('🗜️ Step 10b: Got transcript blob, size:', blob.size);
+										const ds = new DecompressionStream('gzip');
+										const decompressedStream = blob.stream().pipeThrough(ds);
+										const decompressedBlob = await new Response(decompressedStream).blob();
+										console.log('🗜️ Step 10c: Decompressed blob, size:', decompressedBlob.size);
+										transcriptText = await decompressedBlob.text();
+										console.log('✅ Step 10d: Transcript decompression successful, text length:', transcriptText.length);
+									} catch (decompressErr) {
+										console.error('❌ Step 10 - Transcript decompression failed:', decompressErr);
+										console.error('❌ Error stack:', decompressErr.stack);
+										throw decompressErr;
+									}
+								} else {
+									// Not compressed, decode as text
+									console.log('📄 Step 10a: Transcript is not compressed, decoding as text');
+									transcriptText = new TextDecoder().decode(transcriptBuffer);
+									console.log('✅ Step 10b: Got transcript text, length:', transcriptText.length);
 								}
 								
-								// Fetch the actual transcript content
-								const transcriptResponse = await originalFetch(transcript.temporaryDownloadUrl);
-								const transcriptText = await transcriptResponse.text();
-								
-								console.log('Transcript text sample:', transcriptText.substring(0, 200));
-								
-								// Parse transcript format
-								let parsedText = '';
+								console.log('📝 Step 11: Transcript text sample:', transcriptText.substring(0, 200));
 								
 								// Check if it's WebVTT format
 								if (transcriptText.trim().startsWith('WEBVTT')) {
 									console.log('Detected WebVTT format, parsing...');
-									const includeTimestamps = localStorage.getItem('transcript-include-timestamps') === 'true';
-								console.log('Include timestamps:', includeTimestamps);
-								
-								const lines = [];
-								let currentSpeaker = null;
-								
-								// Parse WebVTT format
-								const vttLines = transcriptText.split('\n');
-								let i = 0;
-								
-								while (i < vttLines.length) {
-									const line = vttLines[i].trim();
 									
-									// Look for timestamp lines (format: 00:00:04.000 --> 00:00:08.000)
-									if (line.includes('-->')) {
-										const timeMatch = line.match(/^(\d{2}:\d{2}:\d{2})/);
-										const timestamp = timeMatch ? timeMatch[1].substring(3) : null; // Extract MM:SS
+									// Parse WebVTT format - extract text only, skip speaker tags
+									const lines = [];
+									const vttLines = transcriptText.split('\n');
+									let i = 0;
+									
+									while (i < vttLines.length) {
+										const line = vttLines[i].trim();
 										
-										i++; // Move to text line(s)
-										
-										// Collect all text lines for this timestamp block (until blank line or next timestamp)
-										const textLines = [];
-										while (i < vttLines.length && vttLines[i].trim() !== '' && !vttLines[i].includes('-->')) {
-											textLines.push(vttLines[i].trim());
-											i++;
-										}
-										
-										if (textLines.length > 0) {
-											let fullText = textLines.join(' ');
+										// Look for timestamp lines (format: 00:00:04.000 --> 00:00:08.000)
+										if (line.includes('-->')) {
+											i++; // Move to text line(s)
 											
-											// Extract speaker name from <v SpeakerName> tag
-											let speakerLabel = null;
-											const speakerMatch = fullText.match(/<v\s+([^>]+)>/);
-											if (speakerMatch) {
-												speakerLabel = speakerMatch[1].trim();
+											// Collect all text lines for this timestamp block (until blank line or next timestamp)
+											const textLines = [];
+											while (i < vttLines.length && vttLines[i].trim() !== '' && !vttLines[i].includes('-->')) {
+												textLines.push(vttLines[i].trim());
+												i++;
+											}
+											
+											if (textLines.length > 0) {
+												let fullText = textLines.join(' ');
+												// Remove speaker tags if present
 												fullText = fullText.replace(/<v\s+[^>]+>/g, '').replace(/<\/v>/g, '').trim();
-												console.log('Found speaker:', speakerLabel, 'at time:', timestamp);
-											}
-											
-											// If we found a speaker name, check if it changed
-											if (speakerLabel) {
-												if (currentSpeaker !== speakerLabel) {
-													currentSpeaker = speakerLabel;
-													
-													if (lines.length > 0) lines.push(''); // Blank line between speakers
-													
-													if (includeTimestamps && timestamp) {
-														lines.push(speakerLabel);
-														lines.push(timestamp);
-													} else {
-														lines.push(`[${speakerLabel}]`);
-													}
-												}
-												
-												// Add the text content
-												if (fullText) {
-													lines.push(fullText);
-												}
-											} else {
-												// No speaker tag found - still add the text to current speaker
-												console.warn('No speaker tag found for text:', fullText.substring(0, 50));
 												if (fullText) {
 													lines.push(fullText);
 												}
 											}
+											continue;
 										}
-										continue; // Skip the i++ at the end since we already advanced
+										i++;
 									}
-									i++;
-								}
-								
-								console.log('Parsed VTT lines:', lines.length);
+									
+									parsedText = lines.join('\n').trim();
+								} else {
+									// Try parsing as JSON
 									try {
 										const transcriptData = JSON.parse(transcriptText);
 										
 										if (transcriptData.recognizedPhrases && Array.isArray(transcriptData.recognizedPhrases)) {
-											// Group phrases by speaker and format with speaker labels
-											let currentSpeaker = null;
 											const lines = [];
-											
 											transcriptData.recognizedPhrases.forEach(phrase => {
 												if (phrase.nBest && phrase.nBest[0]) {
-													const text = phrase.nBest[0].display;
-													const speakerId = phrase.speaker;
-													
-													// Get speaker name - try real name first, then fall back to numbered label
-													let speakerLabel = getSpeakerName(speakerId);
-													
-													// Try to get timestamp from various possible fields
-													const timestamp = phrase.offsetInTicks || phrase.offset || phrase.startTime || phrase.timestamp;
-													const formattedTime = timestamp ? formatTimestamp(timestamp) : null;
-													
-													// Check if timestamps should be included
-													const includeTimestamps = localStorage.getItem('transcript-include-timestamps') === 'true';
-													
-													// Add speaker label when speaker changes
-													if (currentSpeaker !== speakerLabel) {
-														currentSpeaker = speakerLabel;
-														
-														if (lines.length > 0) lines.push(''); // Add blank line between speakers
-														
-														if (includeTimestamps && formattedTime) {
-															// Option B: Name on first line, timestamp on second line
-															lines.push(speakerLabel);
-															lines.push(formattedTime);
-														} else {
-															// Original format with brackets
-															lines.push(`[${speakerLabel}]`);
-														}
-													}
-													
+													lines.push(phrase.nBest[0].display);
+												}
+											});
+											parsedText = lines.join('\n').trim();
+										} else if (transcriptData.entries && Array.isArray(transcriptData.entries)) {
+											const lines = [];
+											transcriptData.entries.forEach(entry => {
+												const text = entry.text || '';
+												if (text) {
 													lines.push(text);
 												}
 											});
-											
-											parsedText = lines.join('\n').trim();
-										} else if (transcriptData.entries && Array.isArray(transcriptData.entries)) {
-											// Legacy format with possible speaker info
-											let currentSpeaker = null;
-											const lines = [];
-											
-											transcriptData.entries.forEach(entry => {
-												const text = entry.text || '';
-												const speakerId = entry.speaker || entry.speakerId;
-												
-												// Get speaker name - try real name first, then fall back to numbered label
-												let speakerLabel = getSpeakerName(speakerId);
-												
-												// Try to get timestamp from various possible fields
-												const timestamp = entry.offsetInTicks || entry.offset || entry.startTime || entry.timestamp;
-												const formattedTime = timestamp ? formatTimestamp(timestamp) : null;
-												
-												// Check if timestamps should be included
-												const includeTimestamps = localStorage.getItem('transcript-include-timestamps') === 'true';
-												
-												// Add speaker label when speaker changes
-												if (currentSpeaker !== speakerLabel) {
-													currentSpeaker = speakerLabel;
-													
-													if (lines.length > 0) lines.push(''); // Add blank line between speakers
-													
-													if (includeTimestamps && formattedTime) {
-														// Option B: Name on first line, timestamp on second line
-														lines.push(speakerLabel);
-														lines.push(formattedTime);
-													} else {
-														// Original format with brackets
-														lines.push(`[${speakerLabel}]`);
-													}
-												}
-												
-												lines.push(text);
-											});
-											
 											parsedText = lines.join('\n').trim();
 										} else {
 											// If we can't parse structure, use the raw text
@@ -366,11 +369,10 @@
 										}
 									} catch (parseErr) {
 										console.warn('Failed to parse as JSON, using raw text:', parseErr);
-										// If JSON parsing fails, use text as-is
 										parsedText = transcriptText;
 									}
 								}
-
+								
 								if (parsedText && parsedText.trim()) {
 									storeTranscript(parsedText);
 								} else {
@@ -392,10 +394,10 @@
 							console.log('✅ Transcript extracted successfully (legacy format)!');
 						}
 					}
-				})
-				.catch((err) => {
+				} catch (err) {
 					console.error('Error extracting transcript:', err);
-				});
+				}
+			})();
 		}
 
 		return response;
