@@ -7,7 +7,7 @@
         body {
             font-family: Arial, sans-serif;
             padding: 20px;
-            max-width: 600px;
+            max-width: 700px;
             margin: 0 auto;
         }
         
@@ -98,6 +98,58 @@
             Enter the HTTP POST URL from your Power Automate flow trigger.
             The transcript will be sent in JSON format with "Meeting Title" and "transcript" fields.
         </div>
+    </div>
+    
+    <div class="setting-group">
+        <h2 style="margin-top: 0; font-size: 18px; color: #333;">How to Setup Power Automate Integration</h2>
+        
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 8px; color: #333;">Step 1: Create a new Flow</h3>
+        <ol style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
+            <li>Go to <a href="https://make.powerautomate.com" target="_blank" style="color: rgb(188, 25, 72);">Power Automate</a></li>
+            <li>Create a new <strong>Instant cloud flow</strong> or <strong>Automated cloud flow</strong></li>
+            <li>Add the trigger: <strong>"When a HTTP request is received"</strong></li>
+        </ol>
+        
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 8px; color: #333;">Step 2: Configure the HTTP Trigger</h3>
+        <p style="margin: 5px 0; line-height: 1.6;">
+            In the HTTP trigger settings:
+        </p>
+        <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
+            <li><strong>Who can trigger the flow:</strong> Select "Anyone" (or "Iedereen" in Dutch)</li>
+            <li><strong>Request Body JSON Schema:</strong> Paste the schema below</li>
+        </ul>
+        
+        <div style="background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 10px; margin: 10px 0; font-family: 'Courier New', monospace; font-size: 12px; overflow-x: auto;">
+<pre style="margin: 0;">{
+    "type": "object",
+    "properties": {
+        "Meeting Title": {
+            "type": "string"
+        },
+        "transcript": {
+            "type": "string"
+        }
+    }
+}</pre>
+        </div>
+        
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 8px; color: #333;">Step 3: Copy the HTTP URL</h3>
+        <p style="margin: 5px 0; line-height: 1.6;">
+            After saving the flow, Power Automate will generate an <strong>HTTP POST URL</strong>. 
+            Copy this URL and paste it in the field above.
+        </p>
+        
+        <h3 style="font-size: 14px; margin-top: 15px; margin-bottom: 8px; color: #333;">Step 4: Add Actions to Your Flow</h3>
+        <p style="margin: 5px 0; line-height: 1.6;">
+            Now you can use the received data in your flow:
+        </p>
+        <ul style="margin: 5px 0; padding-left: 20px; line-height: 1.6;">
+            <li><strong>Meeting Title</strong> - Contains the video title</li>
+            <li><strong>transcript</strong> - Contains the full transcript text</li>
+        </ul>
+        <p style="margin: 10px 0 5px 0; line-height: 1.6;">
+            Common actions: Send to email, save to SharePoint, send to Teams, process with AI (e.g., OpenAI GPT), etc.
+        </p>
     </div>
     
     <button id="save">Save Settings</button>
