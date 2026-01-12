@@ -11,6 +11,7 @@ function initializeUI() {
 	let wrapper = document.createElement('div');
 	let copyTranscriptButton = document.createElement('button');
 	let downloadTranscriptButton = document.createElement('button');
+	let sendToPowerAutomateButton = document.createElement('button');
 	let closeButton = document.createElement('button');
 	let timestampToggle = document.createElement('label');
 	let timestampCheckbox = document.createElement('input');
@@ -34,15 +35,18 @@ wrapper.appendChild(timestampToggle);
 wrapper.appendChild(document.createElement('br'));
 wrapper.appendChild(copyTranscriptButton);
 wrapper.appendChild(downloadTranscriptButton);
+wrapper.appendChild(sendToPowerAutomateButton);
 wrapper.appendChild(closeButton);
 
 closeButton.innerHTML = "X";
 copyTranscriptButton.innerHTML = "Copy Transcript";
 downloadTranscriptButton.innerHTML = "Download Transcript";
+sendToPowerAutomateButton.innerHTML = "Send to Power Automate";
 
 	closeButton.className = "transcript-extractor-button";
 	copyTranscriptButton.className = "transcript-extractor-button";
-	downloadTranscriptButton.className = "transcript-extractor-button transcript-extractor-close-button";
+	downloadTranscriptButton.className = "transcript-extractor-button";
+	sendToPowerAutomateButton.className = "transcript-extractor-button";
 	wrapper.className = "transcript-extractor-wrapper";
 
 		document.querySelector("body").appendChild(wrapper);
@@ -64,6 +68,20 @@ downloadTranscriptButton.innerHTML = "Download Transcript";
 			download(textToDownload);
 		} catch (err) {
 			console.error("Failed to download: ", err);
+			alert(`Error: ${err.message}`);
+		}
+	});
+
+	sendToPowerAutomateButton.addEventListener('click', async () => {
+		try {
+			const powerAutomateUrl = localStorage.getItem('powerautomate-url');
+			if (!powerAutomateUrl) {
+				alert('Please configure Power Automate URL in extension settings first.\n\nRight-click the extension icon and select "Options".');
+				return;
+			}
+			await sendToPowerAutomate(powerAutomateUrl);
+		} catch (err) {
+			console.error('Failed to send to Power Automate: ', err);
 			alert(`Error: ${err.message}`);
 		}
 	});
@@ -121,6 +139,50 @@ function getTranscriptFileName() {
 	const sanitized = videoTitle.replace(/[<>:"/\\|?*]/g, '-');
 	return `transcript-${sanitized}.txt`;
 }
+
+function getVideoTitle() {
+	const selectors = [
+		'h1[class*="videoTitleViewModeHeading"] label',
+		'h1[class*="videoTitle"]',
+		'h1.video-title',
+		'[data-automation-id="video-title"]',
+		'h1'
+	];
+	
+	for (const selector of selectors) {
+		const element = document.querySelector(selector);
+		if (element && element.innerText) {
+			return element.innerText.trim();
+		}
+	}
+	
+	return 'Untitled Video';
+}
+
+async function sendToPowerAutomate(url) {
+	const transcript = getTranscript();
+	const title = getVideoTitle();
+	
+	const payload = {
+		"Meeting Title": title,
+		"transcript": transcript
+	};
+	
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(payload)
+	});
+	
+	if (!response.ok) {
+		throw new Error(`Power Automate returned status ${response.status}`);
+	}
+	
+	alert('Transcript sent to Power Automate successfully!');
+}
+
 // Initialize UI when DOM is ready
 if (document.readyState === 'loading') {
 	document.addEventListener('DOMContentLoaded', initializeUI);

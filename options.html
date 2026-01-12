@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Transcript Extractor Settings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: rgb(188, 25, 72);
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .setting-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: rgb(188, 25, 72);
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        button {
+            background-color: rgb(188, 25, 72);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background-color: rgb(170, 20, 66);
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Transcript Extractor Settings</h1>
+    
+    <div class="setting-group">
+        <label for="powerautomate-url">Power Automate Flow URL:</label>
+        <input type="text" id="powerautomate-url" placeholder="https://prod-xx.westus.logic.azure.com/workflows/...">
+        <div class="help-text">
+            Enter the HTTP POST URL from your Power Automate flow trigger.
+            The transcript will be sent in JSON format with "Meeting Title" and "transcript" fields.
+        </div>
+    </div>
+    
+    <button id="save">Save Settings</button>
+    
+    <div id="status" class="status"></div>
+    
+    <script src="options.js"></script>
+</body>
+</html>
