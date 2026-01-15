@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
-	"name": "Transcript Extractor for Microsoft Stream",
-	"version": "1.2",
-	"description": "Microsoft Stream one click transcript extractor. Copy or download the transcript for easy summarization of meetings via AI (LLMs)",
+	"name": "Transcript Extractor for Stream & YouTube",
+	"version": "2.0",
+	"description": "Extract and send transcripts from Microsoft Stream and captions from YouTube videos. One-click transcript/caption extraction for easy summarization via AI (LLMs) and Power Automate integration.",
 	"permissions": [
 		"clipboardWrite",
 		"storage"
@@ -10,7 +10,9 @@
 	"host_permissions": [
 		"https://*.microsoftstream.com/*",
 		"https://*.sharepoint.com/*",
-		"https://web.microsoftstream.com/*"
+		"https://web.microsoftstream.com/*",
+		"https://www.youtube.com/*",
+		"https://youtube.com/*"
 	],
 	"background": {
 		"service_worker": "background.js"
@@ -30,12 +32,27 @@
 				"https://web.microsoftstream.com/*"
 			],
 			"js": [
+				"power-automate-util.js",
 				"content.js"
 			],
 			"css": [
 				"styles.css"
 			],
 			"run_at": "document_start"
+		},
+		{
+			"matches": [
+				"https://www.youtube.com/*",
+				"https://youtube.com/*"
+			],
+			"js": [
+				"power-automate-util.js",
+				"youtube-content.js"
+			],
+			"css": [
+				"styles.css"
+			],
+			"run_at": "document_end"
 		}
 	],
 	"web_accessible_resources": [

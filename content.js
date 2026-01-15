@@ -74,35 +74,22 @@ sendToPowerAutomateButton.innerHTML = "Send to Power Automate";
 
 	sendToPowerAutomateButton.addEventListener('click', async () => {
 		try {
-			// Try to get URL from chrome.storage API first
-			if (chrome && chrome.storage && chrome.storage.sync) {
-				chrome.storage.sync.get('powerautomate-url', async (result) => {
-					const powerAutomateUrl = result['powerautomate-url'];
-					if (!powerAutomateUrl) {
-						alert('Please configure Power Automate URL in extension settings first.\n\nRight-click the extension icon and select "Options".');
-						return;
-					}
-					await sendToPowerAutomate(powerAutomateUrl);
-				});
-			} else if (chrome && chrome.storage && chrome.storage.local) {
-				// Fallback to local storage
-				chrome.storage.local.get('powerautomate-url', async (result) => {
-					const powerAutomateUrl = result['powerautomate-url'];
-					if (!powerAutomateUrl) {
-						alert('Please configure Power Automate URL in extension settings first.\n\nRight-click the extension icon and select "Options".');
-						return;
-					}
-					await sendToPowerAutomate(powerAutomateUrl);
-				});
-			} else {
-				// Fallback to localStorage if chrome.storage is not available
-				const powerAutomateUrl = localStorage.getItem('powerautomate-url');
+			getPowerAutomateUrl(async (powerAutomateUrl) => {
 				if (!powerAutomateUrl) {
-					alert('Please configure Power Automate URL in extension settings first.\n\nRight-click the extension icon and select "Options".');
+					showPowerAutomateUrlNotConfiguredAlert();
 					return;
 				}
-				await sendToPowerAutomate(powerAutomateUrl);
-			}
+				try {
+					const transcript = getTranscript();
+					const title = getVideoTitle();
+					const sourceUrl = window.location.href;
+					const result = await sendContentToPowerAutomate(title, transcript, 'meeting', sourceUrl, powerAutomateUrl);
+					alert(result.message);
+				} catch (err) {
+					console.error('Failed to send to Power Automate: ', err);
+					alert(`Error: ${err.message}`);
+				}
+			});
 		} catch (err) {
 			console.error('Failed to send to Power Automate: ', err);
 			alert(`Error: ${err.message}`);
